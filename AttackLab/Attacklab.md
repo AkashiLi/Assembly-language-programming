@@ -1,4 +1,12 @@
-# AttackLab 
+# AttackLab
+
+This assignment involves generating a total of five attacks on two programs having different security vulnerabilities to learn:  
+
+- ways to exploit security vulnerabilities when programs do not safeguard themselves well enough against buffer overflows.
+- how to write programs that are more secure, as well as some of the features provided by compilers and operating systems to make programs less vulnerable.
+- stack and parameter-passing mechanisms of x86-64 machine code.
+- how x86-64 instructions are encoded.
+- experience with debugging tools such as GDB and OBJDUMP.
 
 ## PHASE 1
 linux> objdump -d ctarget > ctarget.d 
